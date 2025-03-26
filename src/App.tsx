@@ -6,6 +6,7 @@ import { Buffer } from 'buffer'
 import { parseWithPayloads } from '@truecarry/tlb-abi'
 import { stringify } from 'yaml'
 import { parseUsingBlockTypes } from './BlockParser'
+import { ExampleCell } from './Example'
 
 type OutputFormat = 'yaml' | 'json' | 'plain'
 
@@ -285,6 +286,10 @@ function App() {
                 Clear
               </button>
             </div> */}
+          </div>
+
+          <div class="example-cell-button-container">
+            <button onClick={() => setInput(ExampleCell)} class="example-cell-button">Use example cell</button>
           </div>
         </section>
         
