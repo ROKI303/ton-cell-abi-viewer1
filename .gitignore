@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 .vercel
+download.b64
+download.bin

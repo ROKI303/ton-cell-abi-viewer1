@@ -1,13 +1,13 @@
 import { createEffect, createSignal } from 'solid-js'
 import './App.css'
-import { Cell } from '@ton/core'
+import { Cell, Dictionary } from '@ton/core'
 import { Address } from '@ton/core'
 import { Buffer } from 'buffer'
 import { parseWithPayloads } from '@truecarry/tlb-abi'
-import { stringify, parse as parseYaml } from 'yaml'
+import { stringify } from 'yaml'
 import { parseUsingBlockTypes } from './BlockParser'
 
-type OutputFormat = 'yaml' | 'json'
+type OutputFormat = 'yaml' | 'json' | 'plain'
 
 const sanitizeObject = (obj: any) => {
   if (obj instanceof Cell) {
@@ -43,6 +43,112 @@ const sanitizeObject = (obj: any) => {
   return obj
 }
 
+
+function parseCell(cell: Cell) {
+  let parsed: any
+  try {
+    parsed = parseWithPayloads(cell.beginParse())
+    if (parsed) {
+      return parsed
+    }
+  } catch (e) {
+    console.error(e)
+  }
+
+  try {
+    parsed = parseUsingBlockTypes(cell)
+    if (parsed) {
+      return parsed
+    }
+  } catch (e) {
+    console.error(e)
+  }
+
+  return undefined
+} 
+
+export function replaceCellPayload<T>(obj: T): {
+  data: T
+  hasChanges: boolean
+ } {
+  if (obj === null || obj === undefined || typeof obj !== 'object') {
+    return {
+      data: obj,
+      hasChanges: false
+    }
+  }
+
+  if (obj instanceof Dictionary) {
+    const dictData = obj.keys().reduce((acc, key) => {
+      acc[key] = obj.get(key)
+      return acc
+    }, {} as any)
+    return {
+      data: dictData,
+      hasChanges: true
+    }
+  }
+
+  // Direct JettonPayload case
+  if (obj instanceof Cell) {
+    try {
+      const parsedCell = parseCell(obj)
+      if (parsedCell) {
+        return {
+          data: {
+            data: obj.toBoc().toString('hex'),
+            parsed: parsedCell,
+          } as any,
+          hasChanges: true
+        }
+      }
+
+      return {
+        data: obj,
+        hasChanges: false
+      }
+    } catch (e) {
+      // Not a valid Jetton payload, leave as is
+    }
+    return {
+      data: obj,
+      hasChanges: false
+    }
+  }
+  
+  // Array case
+  if (Array.isArray(obj)) {
+    const replaced = obj.map(item => replaceCellPayload(item))
+    const hasChanges = replaced.some(item => item.hasChanges)
+    return {
+      data: hasChanges 
+        ? replaced.map(item => item.data) as any
+        : obj,
+      hasChanges: hasChanges
+    }
+  }
+  
+  // Regular object case
+  let hasChanges = false;
+  const result = {...obj} as any;
+  
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const {data, hasChanges: hasChangesInner} = replaceCellPayload((obj as any)[key]);
+      if (hasChangesInner) {
+        hasChanges = true;
+        result[key] = data;
+      }
+    }
+  }
+  
+  // Return original object if no changes were made
+  return {
+    data: hasChanges ? result : obj,
+    hasChanges: hasChanges
+  }
+}
+
 function App() {
   const [input, setInput] = createSignal('')
   const [output, setOutput] = createSignal('')
@@ -53,6 +159,12 @@ function App() {
   const formatOutput = (data: any) => {
     if (format() === 'json') {
       return JSON.stringify(data, null, 2)
+    }
+    if (format() === 'plain') {
+      if (typeof data === 'string') {
+        return data
+      }
+      return JSON.stringify(data)
     }
     return stringify(data)
   }
@@ -83,26 +195,20 @@ function App() {
         }
       }
 
-      let parsed: any
-      try {
-        parsed = parseWithPayloads(cell.beginParse())
-      } catch (e) {
-        console.error(e)
-      }
-
-      if (!parsed) {
-        try {
-          parsed = parseUsingBlockTypes(cell)
-        } catch (e) {
-          console.error(e)
+      let parsed = parseCell(cell)
+      while (true) {
+        const {data, hasChanges} = replaceCellPayload(parsed)
+        parsed = data
+        if (!hasChanges) {
+          break
         }
       }
-        
       if (parsed) {
         const sanitized = sanitizeObject(parsed)
-        setOutput(formatOutput(sanitized))
+        setOutput(sanitized)
       } else {
         setOutput(cell.toString())
+        setFormat('plain')
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to parse cell')
@@ -178,8 +284,6 @@ function App() {
                     class={`format-button ${format() === 'yaml' ? 'active' : ''}`}
                     onClick={() => {
                       setFormat('yaml')
-                      const parsed = JSON.parse(output().startsWith('{') ? output() : JSON.stringify(parseYaml(output())))
-                      setOutput(formatOutput(parsed))
                     }}
                   >
                     YAML
@@ -188,13 +292,20 @@ function App() {
                     class={`format-button ${format() === 'json' ? 'active' : ''}`}
                     onClick={() => {
                       setFormat('json')
-                      const parsed = JSON.parse(output().startsWith('{') ? output() : JSON.stringify(parseYaml(output())))
-                      setOutput(formatOutput(parsed))
                     }}
                   >
                     JSON
                   </button>
+                  <button 
+                    class={`format-button ${format() === 'plain' ? 'active' : ''}`}
+                    onClick={() => {
+                      setFormat('plain')
+                    }}
+                  >
+                    Plain
+                  </button>
                 </div>
+
               </div>
               
               <div class="copy-button" onClick={() => navigator.clipboard.writeText(output())}>
@@ -206,7 +317,7 @@ function App() {
                 class="output-textarea"
               >
                 <pre>
-                  {output()}
+                  {formatOutput(output())}
                 </pre>
               </code>
             </div>
