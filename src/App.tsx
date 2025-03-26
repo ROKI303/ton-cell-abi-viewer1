@@ -221,6 +221,29 @@ function App() {
     handleParse(input())
   })
 
+  const openInJsonHero = () => {
+    const jsonData = JSON.stringify(output());
+    fetch('https://jsonhero.io/api/create.json', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'TON Cell Data',
+        content: JSON.parse(jsonData),
+        readOnly: false
+      })
+    }).then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+    }).then(data => {
+      if (data?.location) {
+        window.open(data.location, '_blank');
+      }
+    });
+  }
+
   return (
     <div class="container">
       <header>
@@ -305,11 +328,18 @@ function App() {
                     Plain
                   </button>
                 </div>
-
               </div>
               
-              <div class="copy-button" onClick={() => navigator.clipboard.writeText(output())}>
-                Copy to Clipboard
+              <div class="button-group">
+                <div class="copy-button" onClick={() => navigator.clipboard.writeText(output())}>
+                  Copy to Clipboard
+                </div>
+                <div 
+                  class="copy-button" 
+                  onClick={openInJsonHero}
+                >
+                  Open in JSONHero
+                </div>
               </div>
             </div>
             <div class="output-container">
