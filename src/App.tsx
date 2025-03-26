@@ -362,6 +362,11 @@ function App() {
 
       <footer>
         <p>Built with @ton/core, @truecarry/tlb-abi and SolidJS</p>
+        <p>
+          <a href="https://github.com/TrueCarry/ton-cell-abi-viewer" target="_blank" rel="noopener noreferrer">
+            View on GitHub
+          </a>
+        </p>
       </footer>
     </div>
   )
