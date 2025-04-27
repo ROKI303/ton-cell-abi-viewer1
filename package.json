@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@scaleton/tvm-disassembler": "^0.0.22",
     "@ton/core": "^0.60.1",
     "@truecarry/tlb-abi": "0.2.0-beta.8",
     "buffer": "^6.0.3",

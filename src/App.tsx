@@ -7,8 +7,9 @@ import { parseWithPayloads } from '@truecarry/tlb-abi'
 import { stringify } from 'yaml'
 import { parseUsingBlockTypes } from './BlockParser'
 import { ExampleCell } from './Example'
+import { decompileAll, AssemblerWriter } from '@scaleton/tvm-disassembler';
 
-type OutputFormat = 'yaml' | 'json' | 'plain'
+type OutputFormat = 'yaml' | 'json' | 'plain' | 'code'
 
 const sanitizeObject = (obj: any) => {
   if (obj instanceof Cell) {
@@ -66,12 +67,12 @@ function parseCell(cell: Cell) {
   }
 
   return undefined
-} 
+}
 
 export function replaceCellPayload<T>(obj: T): {
   data: T
   hasChanges: boolean
- } {
+} {
   if (obj === null || obj === undefined || typeof obj !== 'object') {
     return {
       data: obj,
@@ -116,33 +117,33 @@ export function replaceCellPayload<T>(obj: T): {
       hasChanges: false
     }
   }
-  
+
   // Array case
   if (Array.isArray(obj)) {
     const replaced = obj.map(item => replaceCellPayload(item))
     const hasChanges = replaced.some(item => item.hasChanges)
     return {
-      data: hasChanges 
+      data: hasChanges
         ? replaced.map(item => item.data) as any
         : obj,
       hasChanges: hasChanges
     }
   }
-  
+
   // Regular object case
   let hasChanges = false;
-  const result = {...obj} as any;
-  
+  const result = { ...obj } as any;
+
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const {data, hasChanges: hasChangesInner} = replaceCellPayload((obj as any)[key]);
+      const { data, hasChanges: hasChangesInner } = replaceCellPayload((obj as any)[key]);
       if (hasChangesInner) {
         hasChanges = true;
         result[key] = data;
       }
     }
   }
-  
+
   // Return original object if no changes were made
   return {
     data: hasChanges ? result : obj,
@@ -166,6 +167,34 @@ function App() {
         return data
       }
       return JSON.stringify(data)
+    }
+    if (format() === 'code') {
+      try {
+        let cell: Cell | undefined
+        try {
+          cell = Cell.fromBase64(input())
+        } catch (e) {
+          // Try hex format if base64 fails
+        }
+        if (!cell) {
+          try {
+            cell = Cell.fromBoc(Buffer.from(input(), 'hex'))[0]
+          } catch (e) {
+            //
+          }
+        }
+
+        if (!cell) {
+          return stringify(data)
+        }
+
+        const ast = decompileAll({ src: cell }); // Build AST
+        const assembler = AssemblerWriter.write(ast); // Generate assembler from AST
+        return assembler
+      } catch (e) {
+        console.error(e)
+        return stringify(data)
+      }
     }
     return stringify(data)
   }
@@ -198,7 +227,7 @@ function App() {
 
       let parsed = parseCell(cell)
       while (true) {
-        const {data, hasChanges} = replaceCellPayload(parsed)
+        const { data, hasChanges } = replaceCellPayload(parsed)
         parsed = data
         if (!hasChanges) {
           break
@@ -261,7 +290,7 @@ function App() {
               <span class="format-badge">Hex</span>
             </div>
           </div>
-          
+
           <div class="input-group">
             <textarea
               value={input()}
@@ -292,7 +321,7 @@ function App() {
             <button onClick={() => setInput(ExampleCell)} class="example-cell-button">Use example cell</button>
           </div>
         </section>
-        
+
         {error() && (
           <section class="error-section">
             <div class="error">
@@ -301,14 +330,14 @@ function App() {
             </div>
           </section>
         )}
-        
+
         {output() && (
           <section class="output-section">
             <div class="output-header">
               <div class="output-header-content">
                 <h2>Parsed Result</h2>
                 <div class="format-selector">
-                  <button 
+                  <button
                     class={`format-button ${format() === 'yaml' ? 'active' : ''}`}
                     onClick={() => {
                       setFormat('yaml')
@@ -316,7 +345,7 @@ function App() {
                   >
                     YAML
                   </button>
-                  <button 
+                  <button
                     class={`format-button ${format() === 'json' ? 'active' : ''}`}
                     onClick={() => {
                       setFormat('json')
@@ -324,7 +353,7 @@ function App() {
                   >
                     JSON
                   </button>
-                  <button 
+                  <button
                     class={`format-button ${format() === 'plain' ? 'active' : ''}`}
                     onClick={() => {
                       setFormat('plain')
@@ -332,15 +361,23 @@ function App() {
                   >
                     Plain
                   </button>
+                  <button
+                    class={`format-button ${format() === 'code' ? 'active' : ''}`}
+                    onClick={() => {
+                      setFormat('code')
+                    }}
+                  >
+                    Code
+                  </button>
                 </div>
               </div>
-              
+
               <div class="button-group">
                 <div class="copy-button" onClick={() => navigator.clipboard.writeText(output())}>
                   Copy to Clipboard
                 </div>
-                <div 
-                  class="copy-button" 
+                <div
+                  class="copy-button"
                   onClick={openInJsonHero}
                 >
                   Open in JSONHero
