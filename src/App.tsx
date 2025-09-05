@@ -51,6 +51,28 @@ function parseCell(cell: Cell) {
   try {
     parsed = parseWithPayloads(cell.beginParse())
     if (parsed) {
+      console.log('parsed',parsed)
+      if (parsed?.data?.kind === 'TextComment') {
+        // text parser
+        try {
+          if (cell.bits.length > 32) {
+            const slice = cell.beginParse()
+            const op = slice.loadUint(32)
+            if (op === 0x00000000) {
+              const text = slice.loadStringTail()
+              return {
+                kind: 'Comment',
+                text: text,
+              }
+            }
+          }
+          if (parsed) {
+            return parsed
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      }
       return parsed
     }
   } catch (e) {
@@ -65,6 +87,9 @@ function parseCell(cell: Cell) {
   } catch (e) {
     console.error(e)
   }
+
+
+
 
   return undefined
 }
